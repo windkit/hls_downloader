@@ -129,10 +129,12 @@ class HTTPFetchPool:
 	
 def doDownload (url, headers=None, data=None, timeout = 5):
 	result = HTTPFetchResult()
-	if data:
+	if data and headers:
 		req = urllib2.Request(url, data, headers)
-	else:
+	elif headers:
 		req = urllib2.Request(url, headers=headers)
+	else:
+		req = urllib2.Request(url)
 
 	req_obj = None
 	#req = urllib2.Request(url)
@@ -148,7 +150,7 @@ def doDownload (url, headers=None, data=None, timeout = 5):
 #		result.status = -1
 #		result.req_obj = req_obj
 #		return result
-	except Exception:
+	except Exception as err:
 		raise
 
 	result.status = 0
