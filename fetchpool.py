@@ -2,8 +2,10 @@
 
 from multiprocessing.pool import ThreadPool
 import urllib2
+from urllib2 import HTTPError
+from urllib2 import URLError
 
-class ContentLengthError (urllib2.HTTPError):
+class ContentLengthError (HTTPError):
 	pass
 
 class HTTPFetchPool:
@@ -12,10 +14,11 @@ class HTTPFetchPool:
 	_retry_limit = 10
 	_thread_pool = ""
 	_retry_pool = ""
-	_timeout = 1
-	_retry_timeout = 3
+	_timeout = 3
+	_retry_timeout = 10
+	_retry_sleep = 3
 
-	def __init__ (self, num_thread=10, retry_thread=20, retry_limit=10):
+	def __init__ (self, num_thread=5, retry_thread=50, retry_limit=10):
 		self._num_thread = num_thread
 		self._retry_thread = retry_thread
 		self._retry_limit = retry_limit
@@ -88,17 +91,20 @@ class HTTPFetchPool:
 			retrycount = retrycount + 1
 			try:
 				result = doDownload(url, headers, data, self._retry_timeout)
-			except Exception as e:
+			except (HTTPError, URLError) as e:
 				print "Error %d/%d" % (retrycount, self._retry_limit)
+				print e.reason
 				result.status = -1
 				result.exception = e
 				result.retry_asyncresult = None
-				continue
+			except Exception:
+				raise
 			else:
 				result.status = 0
 				result.exception = None
 				result.retry_asyncresult = None
 				break
+			time.sleep(_retry_sleep)
 		
 		if result.status < 0:
 			print "Failed after %d Retries: %s" % (self._retry_limit, url)
