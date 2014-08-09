@@ -9,8 +9,8 @@ class ContentLengthError (HTTPError):
 	pass
 
 class HTTPFetchPool:
-	_num_thread = 10
-	_retry_thread = 20
+	_num_thread = 5
+	_retry_thread = 50
 	_retry_limit = 10
 	_thread_pool = ""
 	_retry_pool = ""
