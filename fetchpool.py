@@ -12,8 +12,8 @@ class HTTPFetchPool:
 	_num_thread = 5
 	_retry_thread = 50
 	_retry_limit = 10
-	_thread_pool = ""
-	_retry_pool = ""
+	_thread_pool = None
+	_retry_pool = None
 	_timeout = 3
 	_retry_timeout = 10
 	_retry_sleep = 3
@@ -46,7 +46,13 @@ class HTTPFetchPool:
 		kwargs['_data'] = data
 		kwargs['_callback'] = callback
 		kwargs['_async'] = False
-		result = self._thread_pool.apply(self.download, args, kwargs)
+		try:
+			result = self._thread_pool.apply(self.download, args, kwargs)
+		except Exception as err:
+			result.status = -1
+			result.exception = err
+			print err.reason
+			raise
 		return self.middleman(result)
 	
 	def addRetryJob (self, *args, **kwargs):
@@ -54,8 +60,7 @@ class HTTPFetchPool:
 		if kwargs['_async']:
 			return self._retry_pool.apply_async(self.retry, args, kwargs, self.middleman)
 		else:
-			result = self._retry_pool.apply(self.retry, args, kwargs)
-		return self.middleman(result)
+			return result = self._retry_pool.apply(self.retry, args, kwargs)
 	
 	@classmethod
 	def middleman (cls, result):
@@ -70,7 +75,6 @@ class HTTPFetchPool:
 		return result
 
 	def stop (self):
-		#TODO: Possbile Deadlock
 		self._thread_pool.close()
 		self._thread_pool.join()
 		self._retry_pool.close()
@@ -97,8 +101,14 @@ class HTTPFetchPool:
 				result.status = -1
 				result.exception = e
 				result.retry_asyncresult = None
-			except Exception:
-				raise
+			except Exception as err:
+				print "Fatal Error " + url + " " + err.reason
+				result.status = -1
+				result.exception = err
+				result.retry_asyncresult = None
+				result.args = args
+				result.kwargs = kwargs
+				return result
 			else:
 				result.status = 0
 				result.exception = None
@@ -127,11 +137,14 @@ class HTTPFetchPool:
 			print "Moved to Retry Pool"
 			result.status = -1
 			result.exception = e
-			result.retry_asyncresult = self.addRetryJob(*args, **kwargs)
-		finally:
-			result.args = args
-			result.kwargs = kwargs
-			return result
+			if kwargs['_async']:
+				result.retry_asyncresult = self.addRetryJob(*args, **kwargs)
+			else:
+				result = self.addRetryJob(*args, **kwargs)
+		
+		result.args = args
+		result.kwargs = kwargs
+		return result
 	
 def doDownload (url, headers=None, data=None, timeout = 5):
 	result = HTTPFetchResult()
@@ -146,25 +159,14 @@ def doDownload (url, headers=None, data=None, timeout = 5):
 	#req = urllib2.Request(url)
 	try:
 		req_obj = urllib2.urlopen(req, timeout=timeout)
-#	except urllib2.HTTPError as e:
-#		print e.reason
-#		result.status = -1
-#		result.req_obj = req_obj
-#		return result
-#	except urllib2.URLError as e:
-#		print e.reason
-#		result.status = -1
-#		result.req_obj = req_obj
-#		return result
 	except Exception as err:
-		raise
+		raise err
 
 	result.status = 0
 	result.req_obj = req_obj
 	ret_data = req_obj.read()
 	result.data = ret_data
 
-#		print req_obj.headers
 	if "Content-Length" in req_obj.headers:
 		if len(ret_data) != int(req_obj.headers["Content-Length"]):
 			raise ContentLengthError()
