@@ -56,11 +56,10 @@ class HTTPFetchPool:
 		return self.middleman(result)
 	
 	def addRetryJob (self, *args, **kwargs):
-		result = HTTPFetchResult()
 		if kwargs['_async']:
 			return self._retry_pool.apply_async(self.retry, args, kwargs, self.middleman)
 		else:
-			return result = self._retry_pool.apply(self.retry, args, kwargs)
+			return self._retry_pool.apply(self.retry, args, kwargs)
 	
 	@classmethod
 	def middleman (cls, result):
