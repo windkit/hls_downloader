@@ -107,7 +107,7 @@ class HTTPFetchPool:
 				result.retry_asyncresult = None
 				result.args = args
 				result.kwargs = kwargs
-				raise err
+				raise
 #				return result
 			else:
 				result.status = 0
@@ -118,7 +118,7 @@ class HTTPFetchPool:
 		
 		if result.status < 0:
 			print "Failed after %d Retries: %s" % (self._retry_limit, url)
-			raise result.exception
+			raise 
 
 		result.args = args
 		result.kwargs = kwargs
@@ -159,10 +159,7 @@ def doDownload (url, headers=None, data=None, timeout = 5):
 
 	req_obj = None
 	#req = urllib2.Request(url)
-	try:
-		req_obj = urllib2.urlopen(req, timeout=timeout)
-	except Exception as err:
-		raise err
+	req_obj = urllib2.urlopen(req, timeout=timeout)
 
 	result.status = 0
 	result.req_obj = req_obj
