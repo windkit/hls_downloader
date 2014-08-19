@@ -46,13 +46,13 @@ class HTTPFetchPool:
 		kwargs['_data'] = data
 		kwargs['_callback'] = callback
 		kwargs['_async'] = False
-		try:
-			result = self._thread_pool.apply(self.download, args, kwargs)
-		except Exception as err:
-			result.status = -1
-			result.exception = err
-			print err.reason
-			raise
+#		try:
+		result = self._thread_pool.apply(self.download, args, kwargs)
+#		except Exception as err:
+#			result.status = -1
+#			result.exception = err
+#			print err.reason
+#			raise
 		return self.middleman(result)
 	
 	def addRetryJob (self, *args, **kwargs):
@@ -107,7 +107,8 @@ class HTTPFetchPool:
 				result.retry_asyncresult = None
 				result.args = args
 				result.kwargs = kwargs
-				return result
+				raise err
+#				return result
 			else:
 				result.status = 0
 				result.exception = None
@@ -117,6 +118,8 @@ class HTTPFetchPool:
 		
 		if result.status < 0:
 			print "Failed after %d Retries: %s" % (self._retry_limit, url)
+			raise result.exception
+
 		result.args = args
 		result.kwargs = kwargs
 		return result
@@ -132,10 +135,10 @@ class HTTPFetchPool:
 		
 		try:
 			result = doDownload(url, headers, data, self._timeout)
-		except Exception as e:
+		except Exception as err:
 			print "Moved to Retry Pool"
 			result.status = -1
-			result.exception = e
+			result.exception = err
 			if kwargs['_async']:
 				result.retry_asyncresult = self.addRetryJob(*args, **kwargs)
 			else:
