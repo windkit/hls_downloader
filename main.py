@@ -10,6 +10,8 @@ from Crypto.Cipher import AES
 from threading import Lock
 from time import sleep
 
+#setting
+tail_size = 5
 pool_size = 10
 
 logger = logging.getLogger("HLS Downloader")
@@ -37,6 +39,7 @@ logger.addHandler(logf)
 parser = argparse.ArgumentParser(description='Crawl a HLS Playlist')
 parser.add_argument('url', type=str, help='Playlist URL')
 parser.add_argument('--file', type=str, help='Output File')
+parser.add_argument('-t', '--tail', action="store_true", help='Tail Mode')
 args = parser.parse_args()
 
 playlist_url = args.url
@@ -45,6 +48,12 @@ logger.info("Playlist URL: " + playlist_url)
 control = requests.Session()
 data = requests.Session()
 data_pool = grequests.Pool(pool_size)
+
+# Tail Mode
+if args.tail:
+	tail_mode = True
+else:
+	tail_mode = False
 
 # File Mode
 if args.file:
@@ -78,12 +87,14 @@ for playlist in variant_m3u8.playlists:
 auto_highest = True
 stream_res = 0
 # Pick Stream (Resolution)
-if auto_highest:
+if auto_highest and len(variant_m3u8.playlists) > 0:
 	stream_res = max(streams_uri)
 
-logger.info("Stream Picked: %dp" % stream_res)
+	logger.info("Stream Picked: %dp" % stream_res)
 
-stream_uri = streams_uri[stream_res]
+	stream_uri = streams_uri[stream_res]
+else:
+	stream_uri = playlist_url
 logger.info("Chunk List: %s" % (stream_uri))
 # for stream, uri in streams_uri.iteritems():
 
@@ -158,7 +169,13 @@ while True:
 
 	# TODO: Loop Back
 	if old_end == -1:
-		new_start = start_seq
+		if tail_mode:
+			new_start = new_end - tail_size
+			if new_start < start_seq:
+				new_start = start_seq				
+		else:
+			new_start = start_seq
+		last_write = new_start - 1
 	else:
 		new_start = old_end + 1
 	
