@@ -11,8 +11,12 @@ from threading import Lock
 from time import sleep
 
 #setting
-tail_size = 5
-pool_size = 10
+tail_mode = False
+tail_dur = 0
+tail_size = 10
+pool_size = 1
+data_timeout = 5
+retry_sleep = 3
 
 logger = logging.getLogger("HLS Downloader")
 logger.setLevel(logging.DEBUG)
@@ -39,7 +43,8 @@ logger.addHandler(logf)
 parser = argparse.ArgumentParser(description='Crawl a HLS Playlist')
 parser.add_argument('url', type=str, help='Playlist URL')
 parser.add_argument('--file', type=str, help='Output File')
-parser.add_argument('-t', '--tail', action="store_true", help='Tail Mode')
+parser.add_argument('-d', '--dur', type=int, help='Tail Mode (Time)')
+parser.add_argument('-t', '--tail', type=int, help='Tail Mode (Chunks)')
 args = parser.parse_args()
 
 playlist_url = args.url
@@ -52,8 +57,10 @@ data_pool = grequests.Pool(pool_size)
 # Tail Mode
 if args.tail:
 	tail_mode = True
-else:
-	tail_mode = False
+
+if args.dur:
+	tail_mode = True
+	tail_dur = int(args.dur)
 
 # File Mode
 if args.file:
@@ -120,7 +127,16 @@ error_count = {}
 while True:
 	# Get Playlist
 
-	pl_res = control.get(stream_uri)
+	try:
+		pl_res = control.get(stream_uri, timeout=5)
+	except Exception as e:
+		logger.info("Cannot Get Chunklist")
+		if chunk_retry < chunk_retry_limit:
+			sleep(chunk_retry_time)
+			chunk_retry += 1
+		else:
+			break
+		
 	if not pl_res.status_code == requests.codes.ok:
 		logger.info("Cannot Get Chunklist")
 		if chunk_retry < chunk_retry_limit:
@@ -129,6 +145,7 @@ while True:
 		else:
 			break
 	
+	chunk_retry = 0
 	content = pl_res.content
 	chunklist = m3u8.loads(content)
 
@@ -155,9 +172,6 @@ while True:
 	list_end = chunklist.is_endlist
 
 	for segment in chunklist.segments:
-	#	print dir(segment)
-	#	print segment.uri
-	#	print segment.duration
 		seg_urls[seq] = urljoin(playlist_url, segment.uri)
 		sleep_dur = segment.duration
 		seq = seq + 1
@@ -170,6 +184,8 @@ while True:
 	# TODO: Loop Back
 	if old_end == -1:
 		if tail_mode:
+			if tail_dur > 0:
+				tail_size = int(tail_dur / target_dur)
 			new_start = new_end - tail_size
 			if new_start < start_seq:
 				new_start = start_seq				
@@ -183,16 +199,11 @@ while True:
 
 	def decode_and_write(resp, seq, enc):
 		global error_count
+		global last_write
+		global fetched_set
+		global fetched_data
 		if resp.status_code != 200 or int(resp.headers['content-length']) != len(resp.content):
-			logger.info("Content Problem, Retrying for %d" % (seq))
-			req = grequests.get(seg_urls[seq], callback=set_seq_hook(seq, enc), session=data)
-			error_count[seq] = error_count[seq] + 1
-			if error_count[seq] > 10:
-				logger.warning("Seq %d Failed" % (seq))
-				return
-			sleep(3)
-			grequests.send(req, data_pool)
-			return
+			raise Exception('Content')
 
 		logger.info("Processing Segment #%d" % (seq))
 		out_data = resp.content
@@ -203,9 +214,6 @@ while True:
 			out_data = dec.decrypt(out_data)
 
 		if file_mode:
-			global last_write
-			global fetched_set
-			global fetched_data
 			out_f_lock.acquire()
 			fetched_set.add(seq)
 			fetched_data[seq] = out_data
@@ -213,10 +221,14 @@ while True:
 			while True:
 				if last_write + 1 in fetched_set:
 					last_write = last_write + 1
-					write_data = fetched_data[last_write]
-					logger.debug("Writing %d to %s" % (last_write, out_file));
-					out_f.write(write_data)
-					del fetched_data[last_write]
+					if fetched_data[last_write]:
+						write_data = fetched_data[last_write]
+						logger.debug("Writing %d to %s" % (last_write, out_file));
+						out_f.write(write_data)
+						del fetched_data[last_write]
+					else:
+						logger.debug("Skip writing %d to %s" % (last_write, out_file));
+						del fetched_data[last_write]
 				else:
 					break
 			out_f_lock.release()
@@ -230,6 +242,28 @@ while True:
 			video_f.close()
 				
 
+	def get_one(seq, enc):
+		global error_count
+		global fetched_set
+		global fetched_data
+		global data_pool
+		while True:
+			try:
+				resp = requests.request('GET', seg_urls[seq], timeout=data_timeout)
+				decode_and_write(resp, seq, enc)
+				break
+			except Exception as e:
+				print e
+				logger.info("Content Problem, Retrying for %d" % (seq))
+				error_count[seq] = error_count[seq] + 1
+				if error_count[seq] > 10:
+					logger.warning("Seq %d Failed" % (seq))
+					if file_mode:
+						fetched_data[seq] = None
+						fetched_set.add(seq)
+					break
+				sleep(retry_sleep)
+
 	def set_seq_hook(seq, enc):
 		def hook(resp, **data):
 			decode_and_write(resp, seq, enc)
@@ -237,14 +271,9 @@ while True:
 		return hook
 
 	for seq in range(new_start, new_end + 1):
-		req = grequests.get(seg_urls[seq], callback=set_seq_hook(seq, enc), session=data)
-	#	segment_reqs.append(req)
 		error_count[seq] = 0
-		grequests.send(req, data_pool)
+		data_pool.spawn(get_one,seq,enc)
 		updated = True
-
-
-	#grequests.send(segment_reqs, data_pool)
 
 #	if not updated:
 	sleep_dur = target_dur / 2
