@@ -158,6 +158,11 @@ while True:
 
 	target_dur = chunklist.target_duration
 	start_seq = chunklist.media_sequence
+	
+	if start_seq == None:
+		logger.warning("Incorrect Chunklist")
+		sleep(chunk_retry_time)
+		continue
 
 	if last_write == -1:
 		last_write = start_seq - 1
@@ -181,7 +186,6 @@ while True:
 	new_start = start_seq
 	new_end = seq - 1
 
-	# TODO: Loop Back
 	if old_end == -1:
 		if tail_mode:
 			if tail_dur > 0:
