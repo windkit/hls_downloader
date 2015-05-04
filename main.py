@@ -14,7 +14,7 @@ from time import sleep
 tail_mode = False
 tail_dur = 0
 tail_size = 10
-pool_size = 1
+pool_size = 5
 data_timeout = 5
 retry_sleep = 3
 
@@ -134,6 +134,7 @@ while True:
 		if chunk_retry < chunk_retry_limit:
 			sleep(chunk_retry_time)
 			chunk_retry += 1
+			continue
 		else:
 			break
 		
@@ -142,6 +143,7 @@ while True:
 		if chunk_retry < chunk_retry_limit:
 			sleep(chunk_retry_time)
 			chunk_retry += 1
+			continue
 		else:
 			break
 	
