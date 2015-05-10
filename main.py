@@ -57,6 +57,7 @@ data_pool = grequests.Pool(pool_size)
 # Tail Mode
 if args.tail:
 	tail_mode = True
+	tail_size = int(args.tail)
 
 if args.dur:
 	tail_mode = True
@@ -190,7 +191,9 @@ while True:
 
 	if old_end == -1:
 		if tail_mode:
+			logger.info("Tail Mode")
 			if tail_dur > 0:
+				logger.info("Tail Time: %d" % (tail_dur))
 				tail_size = int(tail_dur / target_dur)
 			new_start = new_end - tail_size
 			if new_start < start_seq:
