@@ -216,7 +216,7 @@ while True:
     list_end = chunklist.is_endlist
 
     for segment in chunklist.segments:
-        seg_urls[seq] = urljoin(playlist_url, segment.uri)
+        seg_urls[seq] = urljoin(stream_uri, segment.uri)
         sleep_dur = segment.duration
         seq = seq + 1
 
