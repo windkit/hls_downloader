@@ -44,6 +44,7 @@ logger.addHandler(logf)
 parser = argparse.ArgumentParser(description='Crawl a HLS Playlist')
 parser.add_argument('url', type=str, help='Playlist URL')
 parser.add_argument('-f', '--file', type=str, help='Output File')
+parser.add_argument('-k', '--keyfile', type=str, help='Key File')
 parser.add_argument('-d', '--dur', type=int, help='Tail Mode (Time)')
 parser.add_argument('-t', '--tail', type=int, help='Tail Mode (Chunks)')
 parser.add_argument('--header', default="header.json", type=str, help='Header (JSON)')
@@ -193,7 +194,11 @@ while True:
 
     if chunklist.key:
         logger.info("Stream Encrypted with %s!", enc.method)
-        enc.key = control.get(enc.uri, cookies=cookie_dict, headers=header_dict).content
+        if args.keyfile:
+            with open(args.keyfile) as f:
+                enc.key = f.read()
+        else:
+            enc.key = control.get(enc.uri, cookies=cookie_dict, headers=header_dict).content
 
     target_dur = chunklist.target_duration
     start_seq = chunklist.media_sequence
