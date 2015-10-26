@@ -194,6 +194,8 @@ while True:
 
     if chunklist.key:
         logger.info("Stream Encrypted with %s!", enc.method)
+        if enc.iv:
+            enc.iv = enc.iv[2:].decode("hex")
         if args.keyfile:
             with open(args.keyfile) as f:
                 enc.key = f.read()
