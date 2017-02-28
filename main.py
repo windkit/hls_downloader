@@ -47,6 +47,7 @@ parser.add_argument('-f', '--file', type=str, help='Output File')
 parser.add_argument('-k', '--keyfile', type=str, help='Key File')
 parser.add_argument('-d', '--dur', type=int, help='Tail Mode (Time)')
 parser.add_argument('-t', '--tail', type=int, help='Tail Mode (Chunks)')
+parser.add_argument('-a', '--apend', dest='append', action='store_true', help='Append Mode')
 parser.add_argument('--header', default="header.json", type=str, help='Header (JSON)')
 parser.add_argument('--cookie', default="cookie.txt", type=str, help='Cookie (FireBug/JSON)')
 args = parser.parse_args()
@@ -113,6 +114,8 @@ mpl_res = control.get(playlist_url, cookies=cookie_dict, headers=header_dict)
 content = mpl_res.content
 playlist_url = mpl_res.url
 
+logger.info("Main Playlist %s ST %d" % (playlist_url, mpl_res.status_code))
+
 # Detect Resolution
 variant_m3u8 = m3u8.loads(content)
 
@@ -155,7 +158,10 @@ chunk_retry_time = 10
 last_write = -1
 
 if file_mode:
-    out_f = open(out_file, "wb")
+    if args.append:
+	    out_f = open(out_file, "ab")
+    else:
+        out_f = open(out_file, "wb")
     out_f_lock = Lock()
     fetched_set = set()
     fetched_data = dict()
@@ -188,6 +194,7 @@ while True:
     chunk_retry = 0
     content = pl_res.content
     chunklist = m3u8.loads(content)
+	
 
     # Check Key
     enc = chunklist.key
@@ -195,16 +202,22 @@ while True:
     if chunklist.key:
         logger.info("Stream Encrypted with %s!", enc.method)
         if enc.iv:
-            enc.iv = enc.iv[2:].decode("hex")
+	        enc.iv = enc.iv[2:].decode("hex")
+        
         if args.keyfile:
             with open(args.keyfile) as f:
                 enc.key = f.read()
         else:
-            enc.key = control.get(enc.uri, cookies=cookie_dict, headers=header_dict).content
+            key_uri = urljoin(playlist_url, enc.uri)
+            enc.key = control.get(key_uri, cookies=cookie_dict, headers=header_dict).content
 
     target_dur = chunklist.target_duration
-    start_seq = chunklist.media_sequence
     
+    start_seq = chunklist.media_sequence
+	
+    seg_urls = dict()
+
+
     if start_seq == None:
         logger.warning("Incorrect Chunklist")
         sleep(chunk_retry_time)
@@ -212,10 +225,11 @@ while True:
 
     if last_write == -1:
         last_write = start_seq - 1
-    
-    seq = start_seq
 
-    seg_urls = dict()
+
+
+    seq = chunklist.media_sequence	
+
 
     sleep_dur = 0
     updated = False
@@ -224,6 +238,7 @@ while True:
 
     for segment in chunklist.segments:
         seg_urls[seq] = urljoin(stream_uri, segment.uri)
+        logger.info(seg_urls[seq])
         sleep_dur = segment.duration
         seq = seq + 1
 
@@ -302,6 +317,7 @@ while True:
         while True:
             try:
                 resp = requests.request('GET', seg_urls[seq], timeout=data_timeout)
+                logger.debug(seg_urls[seq])
                 decode_and_write(resp, seq, enc)
                 break
             except Exception as e:
