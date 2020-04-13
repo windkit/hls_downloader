@@ -7,3 +7,4 @@ Python HTTP Live Streaming Downloader (Retrieving complete stream)
 - requests
 - grequests
 - m3u8
+- pycrypto
