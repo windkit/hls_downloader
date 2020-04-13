@@ -4,7 +4,10 @@ import logging
 import argparse
 import requests
 import m3u8
-from urlparse import urljoin
+try:
+    from urlparse import urljoin
+except ImportError:
+    from urllib.parse import urljoin
 import grequests
 from Crypto.Cipher import AES
 from threading import Lock
@@ -103,7 +106,7 @@ try:
         for ele in header_json:
             header_dict.update(ele)
 except IOError as e:
-    print e
+    print(e)
 
 logger.debug(cookie_dict)
 logger.debug(header_dict)
@@ -321,7 +324,7 @@ while True:
                 decode_and_write(resp, seq, enc)
                 break
             except Exception as e:
-                print e
+                print(e)
                 logger.info("Content Problem, Retrying for %d" % (seq))
                 error_count[seq] = error_count[seq] + 1
                 if error_count[seq] > 10:
